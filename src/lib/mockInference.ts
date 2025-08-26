@@ -74,8 +74,8 @@ export const runSubtyping = async (algorithm: string, variant: string, leftType:
   // Fallback to mock subtyping
   await new Promise(resolve => setTimeout(resolve, 500));
   
-  // Generate mock subtyping derivation
-  if (algorithm === 'Subtyping') {
+  // Generate mock subtyping derivation for any subtyping algorithm id
+  if (['Revisiting', 'Fsubmu', 'TranslateBCD'].includes(algorithm)) {
     return generateSubtypingDerivation(leftType, rightType, variant);
   }
   

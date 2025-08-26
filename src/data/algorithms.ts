@@ -554,6 +554,36 @@ export const algorithms: TypeInferenceAlgorithm[] = [
 // Separate list for subtyping algorithms
 export const subtypingAlgorithms: TypeInferenceAlgorithm[] = [
   {
+    id: "TranslateBCD",
+    name: "BCD Subtyping by Translation",
+    labels: ["Subtyping", "Translation", "Recursive Types", "Distributivity"],
+    viewMode: "tree",
+    mode: "subtyping",
+    paper: {
+      title: "BCD Subtyping by Translation (Work in Progress)",
+      authors: ["Litao Zhou"],
+      year: 2025,
+      url: ""
+    },
+    variants: [
+      {
+        id: "translate",
+        name: "translate",
+        description: "Nominal Unfolding",
+        icon: "Tag"
+      }
+    ],
+    defaultVariant: "translate",
+    rules: [
+      {
+        id: "placeholder",
+        name: "TBA",
+        premises: [],
+        conclusion: "\\text{Rules will be added soon.}"
+      }
+    ]
+  },
+  {
     id: "Revisiting",
     name: "Revisiting Iso-Recursive Subtyping",
     labels: ["Subtyping", "Recursive Types"],
@@ -627,7 +657,7 @@ export const subtypingAlgorithms: TypeInferenceAlgorithm[] = [
         conclusion: "\\text{Rules will be added soon.}"
       }
     ]
-  }
+  },
 ];
 
 // Separate list for translate algorithms
@@ -654,7 +684,7 @@ export const translateAlgorithms: TypeInferenceAlgorithm[] = [
 ];
 
 // Combined list for all algorithms (both inference, subtyping and translate)
-export const allAlgorithms = [...algorithms, ...subtypingAlgorithms, ...translateAlgorithms];
+export const allAlgorithms = [...subtypingAlgorithms,  ...translateAlgorithms, ...algorithms,];
 
 const universalExamples = [
   { name: "Trivial Application", expression: "(\\x. x) 1", description: "Trivial function application of identity function to integer literal" }
@@ -707,7 +737,44 @@ export const subtypingExamples = {
       expression: "mu a. Top -> (mu b. b -> a) <: mu a. Int -> (mu b. b -> a)",
       description: "Nested recursive subtyping"
     }
-  ]
+  ],
+  "TranslateBCD": [
+    {
+      name: "The tricky case 1",
+      expression: "(mu a. Top -> (mu b. Top -> Int)) & (mu a. Top -> (mu b. b -> Bool)) <: (mu a. a -> (mu b. (b -> Int) & (b -> Bool)))",
+      description: "The right type is ordinary but the body is splittable, the corner case is reached"
+    },
+    {
+      name: "The tricky case 2",
+      expression: "(mu a. (mu b. b -> Int)) & (mu a. (mu b. a -> Bool)) <: (mu a. (mu b. (b -> Int) & (a -> Bool)))",
+      description: "This is not derivable in the source declarative rules"
+    },
+    {
+      name: "The tricky case 2 -- related",
+      expression: "(mu a. (mu b. b -> Int)) & (mu a. (mu b. a -> Bool)) <: (mu a. ((mu b. (b -> Int)) & (mu b. (a -> Bool))))",
+      description: "One layer merge, however, should be allowed."
+    },
+    {
+      name: "Positive Recursive Types",
+      expression: "mu a. Top -> a <: mu a. Int -> a",
+      description: "Positive recursive subtyping"
+    },
+    {
+      name: "Negative Recursive Types (Fail)",
+      expression: "mu a. a -> Int <: mu a. a -> Bool",
+      description: "Negative recursive subtyping"
+    },
+    {
+      name: "Negative Recursive Types + Top",
+      expression: "mu a. Top -> Int <: mu a. a -> Int",
+      description: "Recursive type subtyping"
+    },
+    {
+      name: "Nested Recursive Subtyping",
+      expression: "mu a. Top -> (mu b. b -> a) <: mu a. Int -> (mu b. b -> a)",
+      description: "Nested recursive subtyping"
+    }
+  ],
 } as const;
 
 

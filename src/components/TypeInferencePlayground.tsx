@@ -97,7 +97,7 @@ export const TypeInferencePlayground = () => {
         
         inferenceResult = await runSubtyping(
           selectedAlgorithm, 
-          selectedVariant || 'recursive', 
+          selectedVariant || selectedAlgorithmData.defaultVariant || 'translate', 
           parts[0].trim(), 
           parts[1].trim()
         );
