@@ -36,7 +36,7 @@ export const ShareExportButtons = ({
 
     setIsSharing(true);
     try {
-      const shareResult = await shareCurrentState(algorithm.id, expression, variant);
+      const shareResult = await shareCurrentState(algorithm.Id, expression, variant);
       
       if (shareResult.success) {
         toast({
@@ -93,8 +93,9 @@ export const ShareExportButtons = ({
     ).join('\n');
   };
 
+
   const handleExportMarkdown = () => {
-    if (!result?.success || !result.derivation.length) {
+    if (!result?.derivation || result.derivation.length === 0) {
       toast({
         title: "Cannot export",
         description: "No derivation available to export.",
@@ -103,12 +104,12 @@ export const ShareExportButtons = ({
       return;
     }
 
-    const isLinear = algorithm.viewMode === 'linear';
+    const isLinear = algorithm.ViewMode === 'linear';
     const markdown = isLinear ? 
       derivationToLinearMarkdown(result.derivation) :
       derivationToMarkdown(result.derivation);
     
-    const fullMarkdown = `# ${algorithm.name} - Type Derivation
+    const fullMarkdown = `# ${algorithm.Name} - Type Derivation
 
 ## Expression
 \`${expression.trim()}\`
@@ -131,7 +132,7 @@ ${markdown}`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${algorithm.id}-derivation.md`;
+      a.download = `${algorithm.Id}-derivation.md`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -145,6 +146,7 @@ ${markdown}`;
     });
   };
 
+
   return (
     <div className="flex gap-2">
       <Button
@@ -152,12 +154,12 @@ ${markdown}`;
         variant="outline"
         size="sm"
         disabled={disabled || isSharing || !expression.trim()}
-        className="btn-interactive touch-manipulation h-8 w-8 sm:w-auto sm:h-9 p-0 sm:px-3"
+        className="btn-interactive touch-manipulation h-7 w-7 sm:w-auto sm:h-7 p-0 sm:px-2"
       >
         {isSharing ? (
-          <Check className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2 flex-shrink-0" />
+          <Check className="w-3 h-3 sm:w-3 sm:h-3 sm:mr-1 flex-shrink-0" />
         ) : (
-          <Share2 className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2 flex-shrink-0" />
+          <Share2 className="w-3 h-3 sm:w-3 sm:h-3 sm:mr-1 flex-shrink-0" />
         )}
         <span className="hidden sm:inline text-sm">{isSharing ? 'Copied!' : 'Share'}</span>
       </Button>
@@ -167,10 +169,10 @@ ${markdown}`;
           <Button
             variant="outline"
             size="sm"
-            disabled={disabled || !result?.success}
-            className="btn-interactive touch-manipulation h-8 w-8 sm:w-auto sm:h-9 p-0 sm:px-3"
+            disabled={disabled || (!result?.success && (!result?.derivation || result.derivation.length === 0))}
+            className="btn-interactive touch-manipulation h-7 w-7 sm:w-auto sm:h-7 p-0 sm:px-2"
           >
-            <Download className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2 flex-shrink-0" />
+            <Download className="w-3 h-3 sm:w-3 sm:h-3 sm:mr-1 flex-shrink-0" />
             <span className="hidden sm:inline text-sm">Export</span>
           </Button>
         </DropdownMenuTrigger>

@@ -1,36 +1,58 @@
-import { Github, Sun, Moon, Table2, HelpCircle } from 'lucide-react';
+import { Github, Table2, Settings, ChevronDown, Play } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { useTheme } from 'next-themes';
+import { ThemeToggle } from './ThemeToggle';
 import { useState } from 'react';
 import { 
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { 
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { WasmStatusIndicator } from './WasmStatusIndicator';
-import { HelpModal } from './HelpModal';
-import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
+
+import { SettingsModal } from './SettingsModal';
+import { wasmInference } from '@/lib/wasmInterface';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export const Navbar = () => {
-  const { theme, setTheme } = useTheme();
-  const [helpModalOpen, setHelpModalOpen] = useState(false);
+
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const isMobile = useIsMobile();
+
+  const handleWasmUrlChange = (url: string) => {
+    // Update WASM URL and reset module - using type assertion for now
+    (wasmInference as any).updateWasmUrl(url);
+  };
+
+  const toggleCompareMode = () => {
+    const url = new URL(window.location.href);
+    const isCurrentlyCompare = url.searchParams.get('compare') === 'true';
+    
+    if (isCurrentlyCompare) {
+      url.searchParams.delete('compare');
+    } else {
+      url.searchParams.set('compare', 'true');
+    }
+    
+    window.history.pushState({}, '', url.toString());
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
+  // Check current mode
+  const isCompareMode = new URL(window.location.href).searchParams.get('compare') === 'true';
 
   return (
-    <nav className="border-b border-border bg-background sticky top-0 z-50 backdrop-blur-sm bg-background/95">
-      <div className="container mx-auto px-4 sm:px-6 py-3">
-        <div className="flex items-center justify-between gap-2 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 max-w-[55%] sm:max-w-none">
-            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-primary rounded flex items-center justify-center flex-shrink-0">
-              <span className="text-primary-foreground font-bold text-xs sm:text-sm">λ</span>
+    <nav className="border-b border-border bg-background/95 backdrop-blur-sm flex-shrink-0">
+      <div className="px-4 py-2">
+        <div className="flex items-center justify-between">
+          {/* Logo and Title - Left aligned */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-6 h-6 bg-primary rounded flex items-center justify-center flex-shrink-0">
+              <span className="text-primary-foreground font-bold text-xs">λ</span>
             </div>
-            <h1 className="text-xs sm:text-lg font-semibold min-w-0">
+            <h1 className="text-base font-semibold min-w-0">
               <button
                 onClick={() => {
                   const url = new URL(window.location.href);
@@ -38,127 +60,78 @@ export const Navbar = () => {
                   window.history.pushState({}, '', url.toString());
                   window.dispatchEvent(new PopStateEvent('popstate'));
                 }}
-                className="hover:text-primary transition-colors block truncate text-left"
+                className="hover:text-primary transition-colors block text-left"
               >
-                Type Inference Zoo
+                Type Inference Playground
               </button>
             </h1>
           </div>
           
-          <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => {
-                    const url = new URL(window.location.href);
-                    const isCurrentlyCompare = url.searchParams.get('compare') === 'true';
-                    
-                    if (isCurrentlyCompare) {
-                      url.searchParams.delete('compare');
-                    } else {
-                      url.searchParams.set('compare', 'true');
-                    }
-                    
-                    window.history.pushState({}, '', url.toString());
-                    window.dispatchEvent(new PopStateEvent('popstate'));
-                  }}
-                  className="btn-interactive h-7 w-7 sm:h-9 sm:w-9"
-                >
-                  <Table2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Compare algorithms</p>
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setHelpModalOpen(true)}
-                  className="btn-interactive h-7 w-7 sm:h-9 sm:w-9"
-                >
-                  <HelpCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Help & quick reference</p>
-              </TooltipContent>
-            </Tooltip>
-            <div className="hidden sm:block">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div>
-                    <KeyboardShortcutsHelp />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Keyboard shortcuts</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  className="relative btn-interactive h-7 w-7 sm:h-9 sm:w-9"
-                >
-                  <Sun className="h-3 w-3 sm:h-4 sm:w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                  <Moon className="absolute h-3 w-3 sm:h-4 sm:w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                  <span className="sr-only">Toggle theme</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Toggle theme</p>
-              </TooltipContent>
-            </Tooltip>
+          {/* Navigation Items - Right aligned */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Mode Toggle */}
+            <Button
+              variant="outline"
+              onClick={toggleCompareMode}
+              className="btn-interactive"
+              size="sm"
+            >
+              {isCompareMode ? (
+                <>
+                  <Play className="w-4 h-4 mr-1" />
+                  <span className="hidden sm:inline text-xs">Playground</span>
+                </>
+              ) : (
+                <>
+                  <Table2 className="w-4 h-4 mr-1" />
+                  <span className="hidden sm:inline text-xs">Comparison</span>
+                </>
+              )}
+            </Button>
+
+
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
+
+            {/* GitHub Links Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="btn-interactive h-7 w-7 sm:h-9 sm:w-9 px-1 sm:px-3">
-                  <Github className="w-3 h-3 sm:w-4 sm:h-4" />
+                <Button 
+                  variant="outline" 
+                  className="btn-interactive"
+                  size="sm"
+                >
+                  <Github className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 sm:w-96 animate-fade-in-scale">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem 
-                  onClick={() => window.open('https://github.com/cu1ch3n/type-inference-zoo-frontend', '_blank')}
-                  className="flex items-center gap-3 p-3 cursor-pointer transition-fast hover:bg-accent/80"
+                  onClick={() => window.open('https://github.com/cu1ch3n/typ-how', '_blank')}
                 >
-                  <Github className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  <div className="flex flex-col gap-1 min-w-0">
-                    <span className="font-medium">Frontend</span>
-                    <span className="text-xs sm:text-sm text-muted-foreground font-mono truncate">cu1ch3n/type-inference-zoo-frontend</span>
-                  </div>
+                  <Github className="w-4 h-4 mr-2" />
+                  typ.how
                 </DropdownMenuItem>
                 <DropdownMenuItem 
                   onClick={() => window.open('https://github.com/cu1ch3n/type-inference-zoo-wasm', '_blank')}
-                  className="flex items-center gap-3 p-3 cursor-pointer transition-fast hover:bg-accent/80"
                 >
-                  <Github className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  <div className="flex flex-col gap-1 min-w-0">
-                    <span className="font-medium">Core</span>
-                    <span className="text-xs sm:text-sm text-muted-foreground font-mono truncate">cu1ch3n/type-inference-zoo-wasm</span>
-                  </div>
+                  <Github className="w-4 h-4 mr-2" />
+                  Type Inference Zoo
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <div className="hidden sm:block">
-              <WasmStatusIndicator />
-            </div>
+
+            {/* WASM Status - Always visible */}
+            <WasmStatusIndicator onClick={() => setSettingsModalOpen(true)} />
           </div>
         </div>
-        
-        {/* Mobile Row 2: WASM indicator (right-aligned) */}
-        <div className="sm:hidden mt-2 flex justify-end">
-          <WasmStatusIndicator />
-        </div>
       </div>
-      
-      <HelpModal open={helpModalOpen} onOpenChange={setHelpModalOpen} />
+
+      <SettingsModal 
+        open={settingsModalOpen} 
+        onOpenChange={setSettingsModalOpen}
+        onWasmUrlChange={handleWasmUrlChange} 
+      />
     </nav>
   );
 };

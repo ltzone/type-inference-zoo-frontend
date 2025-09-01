@@ -9,7 +9,11 @@ import { wasmInference } from '@/lib/wasmInterface';
 
 type WasmStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
-export const WasmStatusIndicator = () => {
+interface WasmStatusIndicatorProps {
+  onClick?: () => void;
+}
+
+export const WasmStatusIndicator = ({ onClick }: WasmStatusIndicatorProps) => {
   const [status, setStatus] = useState<WasmStatus>('disconnected');
 
   useEffect(() => {
@@ -37,25 +41,43 @@ export const WasmStatusIndicator = () => {
 
   const getStatusText = () => {
     switch (status) {
-      case 'connected': return 'WASM Connected';
-      case 'connecting': return 'Connecting...';
-      case 'error': return 'WASM Unavailable';
-      default: return 'WASM Disconnected';
+      case 'connected': return 'WASM';
+      case 'connecting': return 'WASM';
+      case 'error': return 'WASM';
+      default: return 'WASM';
     }
   };
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className="inline-flex">
-          <Badge variant="outline" className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
-            <span className="text-xs">{getStatusText()}</span>
-          </Badge>
-        </div>
+        <button
+          onClick={onClick}
+          className={`inline-flex items-center gap-2 px-3 h-7 sm:h-9 rounded-md text-xs font-medium border transition-colors ${
+            onClick 
+              ? 'hover:bg-accent hover:border-primary/50 cursor-pointer' 
+              : 'cursor-default border-border'
+          } ${
+            status === 'connected' ? 'border-green-500/50 bg-green-500/5 text-green-700 dark:text-green-400' :
+            status === 'connecting' ? 'border-yellow-500/50 bg-yellow-500/5 text-yellow-700 dark:text-yellow-400' :
+            status === 'error' ? 'border-red-500/50 bg-red-500/5 text-red-700 dark:text-red-400' :
+            'border-gray-500/50 bg-gray-500/5 text-gray-700 dark:text-gray-400'
+          }`}
+        >
+          <div className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
+          <span>{getStatusText()}</span>
+        </button>
       </TooltipTrigger>
-      <TooltipContent>
-        <p className="font-mono text-xs">{wasmInference.getWasmUrl()}</p>
+      <TooltipContent className="z-50">
+        <div className="space-y-1">
+          <p className="font-medium">{
+            status === 'connected' ? 'WASM Connected' :
+            status === 'connecting' ? 'Connecting...' :
+            status === 'error' ? 'WASM Unavailable' :
+            'WASM Disconnected'
+          }</p>
+          <p className="font-mono text-xs opacity-75">{wasmInference.getWasmUrl()}</p>
+        </div>
       </TooltipContent>
     </Tooltip>
   );

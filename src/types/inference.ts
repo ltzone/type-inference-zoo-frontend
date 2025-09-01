@@ -1,44 +1,53 @@
 // Type definitions for the type inference playground
 
 export interface AlgorithmVariant {
-  id: string;
-  name: string;
-  description: string;
-  icon?: string;
+  Id: string;
+  Name: string;
+  Description: string;
+  Icon?: string;
+}
+
+export interface AlgorithmExample {
+  Name: string;
+  Description: string;
+  Expression: string;
 }
 
 export interface TypeInferenceAlgorithm {
-  id: string;
-  name: string;
-  labels: string[];
-  viewMode: 'tree' | 'linear';
-  mode: 'inference' | 'subtyping' | 'translate'; // Add translate mode
-  variants?: AlgorithmVariant[];
-  defaultVariant?: string;
-  paper?: {
-    title: string;
-    authors: string[];
-    year: number;
-    url?: string;
-  };
-  rules: TypingRule[] | RuleSection[];
-  variantRules?: Record<string, TypingRule[] | RuleSection[]>;
+  Id: string;
+  Name: string;
+  Labels: string[];
+  ViewMode: 'tree' | 'linear';
+  Mode: 'inference' | 'subtyping';
+  Examples?: AlgorithmExample[] | null;
+  Variants?: AlgorithmVariant[] | null;
+  DefaultVariant?: string | null;
+  Paper?: {
+    Title: string;
+    Authors: string[];
+    Year: number;
+    Url?: string;
+  } | null;
+  Rules: TypingRule[] | RuleSection[];
+  RuleGroups?: RuleSection[] | null;
+  VariantRules?: [string, (TypingRule[] | RuleSection[])][] | null;
 }
 
 export interface TypingRule {
-  id: string;
-  name: string;
-  premises: string[]; // KaTeX expressions
-  conclusion: string; // KaTeX expression
-  reduction?: string; // For worklist-style rules: "A → B"
+  Id: string;
+  Name: string;
+  Premises: string[];
+  Conclusion: string;
+  Reduction?: string | null;
+  Description?: string | null;
 }
 
 export interface RuleSection {
-  id: string;
-  name: string;
-  description?: string;
-  formula?: string; // LaTeX formula showing the form (usually boxed)
-  rules: TypingRule[];
+  Id: string;
+  Name: string;
+  Description?: string;
+  Formula?: string;
+  Rules: TypingRule[];
 }
 
 export interface DerivationStep {
@@ -64,17 +73,8 @@ export interface SubtypingResult {
   errorLatex?: boolean;
 }
 
-// Add new interface for translation results
-export interface TranslationResult {
-  success: boolean;
-  finalType?: string; // The translated type
-  derivation: DerivationStep[];
-  error?: string;
-  errorLatex?: boolean;
-}
-
 // Union type for all possible results
-export type AlgorithmResult = InferenceResult | SubtypingResult | TranslationResult;
+export type AlgorithmResult = InferenceResult | SubtypingResult;
 
 export interface LambdaExpression {
   raw: string;

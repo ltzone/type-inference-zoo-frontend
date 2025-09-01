@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Play, RotateCcw, Code, Lightbulb, Loader2, HelpCircle, ArrowRight } from 'lucide-react';
-import { algorithmExamples, subtypingExamples, translateExamples, allAlgorithms } from '@/data/algorithms';
+import { TypeInferenceAlgorithm } from '@/types/inference';
 import { HelpModal } from './HelpModal';
+import { ExpressionHistory } from './ExpressionHistory';
+import { LatexText } from './LatexText';
 
 interface ExpressionInputProps {
   expression: string;
@@ -13,6 +15,7 @@ interface ExpressionInputProps {
   onInfer: () => void;
   isInferring: boolean;
   selectedAlgorithm: string;
+  algorithms: TypeInferenceAlgorithm[];
   selectedVariant?: string;
 }
 
@@ -22,40 +25,38 @@ export const ExpressionInput = forwardRef<HTMLTextAreaElement, ExpressionInputPr
   onInfer,
   isInferring,
   selectedAlgorithm,
+  algorithms,
   selectedVariant
 }, ref) => {
   const [selectedExample, setSelectedExample] = useState<string>('');
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [leftType, setLeftType] = useState<string>('');
   const [rightType, setRightType] = useState<string>('');
+  const [addToHistoryFunction, setAddToHistoryFunction] = useState<((expression: string) => void) | null>(null);
   
-  const selectedAlgorithmData = allAlgorithms.find(a => a.id === selectedAlgorithm);
-  const isSubtypingMode = selectedAlgorithmData?.mode === 'subtyping';
-  const isTranslateMode = selectedAlgorithmData?.mode === 'translate';
+  const selectedAlgorithmData = algorithms.find(a => a.Id === selectedAlgorithm);
+  const isSubtypingMode = selectedAlgorithmData?.Mode === 'subtyping';
   
-  // Use appropriate examples based on mode
-  const currentExamples = isSubtypingMode 
-    ? (subtypingExamples[selectedAlgorithm as keyof typeof subtypingExamples] || [])
-    : isTranslateMode
-      ? (translateExamples[selectedAlgorithm as keyof typeof translateExamples] || [])
-      : (algorithmExamples[selectedAlgorithm as keyof typeof algorithmExamples] || []);
+  // Get examples from the selected algorithm
+  const currentExamples = selectedAlgorithmData?.Examples || [];
 
   const handleExampleSelect = (exampleName: string) => {
-    const example = currentExamples.find(e => e.name === exampleName);
+    const example = currentExamples.find(e => e.Name === exampleName);
     if (example) {
       if (isSubtypingMode) {
-        const parts = example.expression.split(' <: ');
+        // Parse subtyping examples like "Int <: Top" into left and right types
+        const parts = example.Expression.split(' <: ');
         if (parts.length === 2) {
           setLeftType(parts[0].trim());
           setRightType(parts[1].trim());
           onExpressionChange(`${parts[0].trim()} <: ${parts[1].trim()}`);
         } else {
-          setLeftType(example.expression);
+          setLeftType(example.Expression);
           setRightType('');
-          onExpressionChange(example.expression);
+          onExpressionChange(example.Expression);
         }
       } else {
-        onExpressionChange(example.expression);
+        onExpressionChange(example.Expression);
       }
       setSelectedExample(exampleName);
     }
@@ -70,10 +71,24 @@ export const ExpressionInput = forwardRef<HTMLTextAreaElement, ExpressionInputPr
     }
   };
 
+  const handleInfer = () => {
+    // Add current expression to history when running inference
+    if (addToHistoryFunction && expression && expression.trim()) {
+      addToHistoryFunction(expression.trim());
+    }
+    onInfer();
+  };
+
+  // Reset selected example when algorithm changes
+  useEffect(() => {
+    setSelectedExample('');
+  }, [selectedAlgorithm]);
+
+  // Reset selected example when expression changes and doesn't match current example
   useEffect(() => {
     if (selectedExample) {
-      const currentExample = currentExamples.find(e => e.name === selectedExample);
-      if (currentExample && currentExample.expression !== expression) {
+      const currentExample = currentExamples.find(e => e.Name === selectedExample);
+      if (currentExample && currentExample.Expression !== expression) {
         setSelectedExample('');
       }
     }
@@ -100,34 +115,63 @@ export const ExpressionInput = forwardRef<HTMLTextAreaElement, ExpressionInputPr
 
   if (isSubtypingMode) {
     return (
-      <Card className="academic-panel hover-scale-sm transition-smooth">
-        <CardHeader className="pb-2 sm:pb-2">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
+      <div className="space-y-4">
+        <div className="border-b border-border pb-2">
+          <h3 className="text-sm font-medium flex items-center gap-2">
             <Code className="w-4 h-4 text-primary" />
             Subtyping Check
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 pt-0">
+          </h3>
+        </div>
+        <div className="space-y-3">
           <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
             <Select value={selectedExample} onValueChange={handleExampleSelect}>
               <SelectTrigger className="w-full bg-card transition-smooth hover:border-primary/50">
-                <div className="flex items-center gap-2">
-                  <Lightbulb className="w-3.5 h-3.5 text-muted-foreground" />
-                  <SelectValue placeholder="Choose an example..." />
+                <div className="flex items-start gap-2 w-full min-w-0">
+                  <Lightbulb className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-1" />
+                  {selectedExample ? (
+                    <div className="flex flex-col min-w-0 flex-1 overflow-hidden items-start" style={{ maxWidth: 'calc(100% - 2rem)' }}>
+                      <span 
+                        className="font-medium text-sm text-left" 
+                        style={{ 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          maxWidth: '100%',
+                          textAlign: 'left'
+                        }}
+                      >
+                        {selectedExample}
+                      </span>
+                      <span 
+                        className="text-xs text-muted-foreground font-code text-left" 
+                        style={{ 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          maxWidth: '100%',
+                          textAlign: 'left'
+                        }}
+                      >
+                        {currentExamples.find(e => e.Name === selectedExample)?.Expression}
+                      </span>
+                    </div>
+                  ) : (
+                    <SelectValue placeholder="Choose an example..." />
+                  )}
                 </div>
               </SelectTrigger>
               <SelectContent className="animate-fade-in-scale">
-                {currentExamples.map((example, index) => (
+                 {currentExamples.map((example, index) => (
                   <SelectItem 
-                    key={example.name} 
-                    value={example.name}
+                    key={example.Name} 
+                    value={example.Name}
                     className="transition-fast hover:bg-accent/50"
                     style={{ animationDelay: `${index * 0.05}s` }}
                   >
                     <div className="flex flex-col items-start">
-                      <span className="font-medium">{example.name}</span>
-                      <span className="text-xs text-muted-foreground font-code">
-                        {example.expression}
+                      <span className="font-medium">{example.Name}</span>
+                      <span className="text-xs text-muted-foreground font-code truncate">
+                        {example.Expression}
                       </span>
                     </div>
                   </SelectItem>
@@ -140,32 +184,32 @@ export const ExpressionInput = forwardRef<HTMLTextAreaElement, ExpressionInputPr
             <div className="space-y-3">
               {/* Left Type Input */}
               <div className="relative">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setHelpModalOpen(true)}
-                  className="absolute bottom-2 left-2 h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth z-10"
-                >
-                  <HelpCircle className="w-3 h-3" />
-                </Button>
                 <Textarea 
                   value={leftType} 
                   onChange={e => setLeftType(e.target.value)} 
                   placeholder="Left type (e.g., Int, Top -> Int, mu a. a -> Int)" 
-                  className="font-code text-xs sm:text-sm bg-code min-h-[80px] resize-none pr-20 pl-8 border-muted-foreground/20 focus:border-primary transition-smooth focus:shadow-lg focus:shadow-primary/10 touch-manipulation" 
+                  className="font-code text-xs sm:text-sm bg-code min-h-[120px] resize-none pr-16 pl-3 border-muted-foreground/20 focus:border-primary transition-smooth focus:shadow-lg focus:shadow-primary/10 touch-manipulation" 
                   spellCheck={false} 
                 />
                 <div className="absolute top-2 right-2 text-xs text-muted-foreground font-medium">
-                  Left Type
+                  Left
                 </div>
+                {leftType.trim() && (
+                  <Button 
+                    onClick={() => setLeftType('')} 
+                    variant="ghost" 
+                    size="sm" 
+                    className="absolute bottom-2 right-2 h-7 w-7 sm:h-8 sm:w-8 p-0 opacity-60 hover:opacity-100 transition-smooth"
+                  >
+                    <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4 transition-transform duration-200 hover:rotate-180" />
+                  </Button>
+                )}
               </div>
 
               {/* Arrow */}
               <div className="flex justify-center">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <ArrowRight className="w-4 h-4" />
-                  <span className="text-sm font-medium">subtype of</span>
-                  <ArrowRight className="w-4 h-4" />
+                <div className="flex items-center text-muted-foreground">
+                  <LatexText text="$\le$" className="text-lg font-medium" />
                 </div>
               </div>
 
@@ -175,42 +219,60 @@ export const ExpressionInput = forwardRef<HTMLTextAreaElement, ExpressionInputPr
                   value={rightType} 
                   onChange={e => setRightType(e.target.value)} 
                   placeholder="Right type (e.g., Top, a -> Int, mu a. a -> Int)" 
-                  className="font-code text-xs sm:text-sm bg-code min-h-[80px] resize-none pr-20 pl-8 border-muted-foreground/20 focus:border-primary transition-smooth focus:shadow-lg focus:shadow-primary/10 touch-manipulation" 
+                  className="font-code text-xs sm:text-sm bg-code min-h-[120px] resize-none pr-16 pl-3 border-muted-foreground/20 focus:border-primary transition-smooth focus:shadow-lg focus:shadow-primary/10 touch-manipulation" 
                   spellCheck={false} 
                 />
                 <div className="absolute top-2 right-2 text-xs text-muted-foreground font-medium">
-                  Right Type
+                  Right
                 </div>
+                {rightType.trim() && (
+                  <Button 
+                    onClick={() => setRightType('')} 
+                    variant="ghost" 
+                    size="sm" 
+                    className="absolute bottom-2 right-2 h-7 w-7 sm:h-8 sm:w-8 p-0 opacity-60 hover:opacity-100 transition-smooth"
+                  >
+                    <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4 transition-transform duration-200 hover:rotate-180" />
+                  </Button>
+                )}
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-2 justify-end">
+              <div className="flex gap-2 justify-between">
                 <Button 
-                  onClick={handleClear} 
                   variant="ghost" 
                   size="sm" 
+                  onClick={() => setHelpModalOpen(true)}
                   className="opacity-60 hover:opacity-100 transition-smooth"
                 >
-                  <RotateCcw className="w-3 h-3 mr-1" />
-                  Clear
+                  <HelpCircle className="w-3 h-3" />
                 </Button>
-                <Button 
-                  onClick={onInfer} 
-                  disabled={!leftType.trim() || !rightType.trim() || isInferring} 
-                  size="sm" 
-                  className={`
-                    btn-interactive transition-smooth touch-manipulation
-                    ${isInferring ? 'animate-pulse glow-primary' : 'hover:glow-primary'}
-                    ${!leftType.trim() || !rightType.trim() ? 'opacity-50' : ''}
-                  `}
-                >
-                  {isInferring ? (
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                  ) : (
-                    <Play className="w-3 h-3 mr-1 transition-transform duration-200 hover:scale-110" />
-                  )}
-                  Check Subtyping
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleClear} 
+                    variant="ghost" 
+                    size="sm" 
+                    className="opacity-60 hover:opacity-100 transition-smooth"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
+                  <Button 
+                    onClick={handleInfer}
+                    disabled={!leftType.trim() || !rightType.trim() || isInferring} 
+                    size="sm" 
+                    className={`
+                      btn-interactive transition-smooth touch-manipulation
+                      ${isInferring ? 'animate-pulse glow-primary' : 'hover:glow-primary'}
+                      ${!leftType.trim() || !rightType.trim() ? 'opacity-50' : ''}
+                    `}
+                  >
+                    {isInferring ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Play className="w-3 h-3 transition-transform duration-200 hover:scale-110" />
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -218,47 +280,77 @@ export const ExpressionInput = forwardRef<HTMLTextAreaElement, ExpressionInputPr
           {selectedExample && (
             <div className="p-3 bg-algorithm rounded-lg border border-primary/20 transition-smooth hover:border-primary/40 hover-scale-sm animate-fade-in-up">
               <p className="text-xs text-muted-foreground leading-relaxed">
-                {currentExamples.find(e => e.name === selectedExample)?.description}
+                {currentExamples.find(e => e.Name === selectedExample)?.Description}
               </p>
             </div>
           )}
-        </CardContent>
+
+          {/* Expression History */}
+          <ExpressionHistory 
+            onSelectExpression={onExpressionChange}
+            onAddToHistory={(func) => {
+              setAddToHistoryFunction(() => func);
+            }}
+          />
+        </div>
         
         <HelpModal open={helpModalOpen} onOpenChange={setHelpModalOpen} />
-      </Card>
+      </div>
     );
   }
 
-  // Single input UI for inference and translate
+  // Original single input mode for type inference
   return (
-    <Card className="academic-panel hover-scale-sm transition-smooth">
-      <CardHeader className="pb-2 sm:pb-2">
-        <CardTitle className="text-base font-semibold flex items-center gap-2">
-          <Code className="w-4 h-4 text-primary" />
-          {isTranslateMode ? 'Translate Type' : 'Input Program'}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 pt-0">
+    <div className="space-y-2 h-full flex flex-col">
         <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
           <Select value={selectedExample} onValueChange={handleExampleSelect}>
             <SelectTrigger className="w-full bg-card transition-smooth hover:border-primary/50">
-              <div className="flex items-center gap-2">
-                <Lightbulb className="w-3.5 h-3.5 text-muted-foreground" />
-                <SelectValue placeholder="Choose an example..." />
+              <div className="flex items-start gap-2 w-full min-w-0">
+                <Lightbulb className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-1" />
+                {selectedExample ? (
+                  <div className="flex flex-col min-w-0 flex-1 overflow-hidden items-start" style={{ maxWidth: 'calc(100% - 2rem)' }}>
+                    <span 
+                      className="font-medium text-sm text-left" 
+                      style={{ 
+                        whiteSpace: 'nowrap', 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis',
+                        maxWidth: '100%',
+                        textAlign: 'left'
+                      }}
+                    >
+                      {selectedExample}
+                    </span>
+                    <span 
+                      className="text-xs text-muted-foreground font-code text-left" 
+                      style={{ 
+                        whiteSpace: 'nowrap', 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis',
+                        maxWidth: '100%',
+                        textAlign: 'left'
+                      }}
+                    >
+                      {currentExamples.find(e => e.Name === selectedExample)?.Expression}
+                    </span>
+                  </div>
+                ) : (
+                  <SelectValue placeholder="Choose an example..." />
+                )}
               </div>
             </SelectTrigger>
             <SelectContent className="animate-fade-in-scale">
               {currentExamples.map((example, index) => (
                 <SelectItem 
-                  key={example.name} 
-                  value={example.name}
+                  key={example.Name} 
+                  value={example.Name}
                   className="transition-fast hover:bg-accent/50"
                   style={{ animationDelay: `${index * 0.05}s` }}
                 >
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">{example.name}</span>
-                    <span className="text-xs text-muted-foreground font-code">
-                      {example.expression}
+                    <span className="font-medium">{example.Name}</span>
+                    <span className="text-xs text-muted-foreground font-code truncate">
+                      {example.Expression}
                     </span>
                   </div>
                 </SelectItem>
@@ -267,8 +359,8 @@ export const ExpressionInput = forwardRef<HTMLTextAreaElement, ExpressionInputPr
           </Select>
         </div>
 
-        <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
-          <div className="relative">
+        <div className="animate-fade-in flex-1 flex flex-col" style={{ animationDelay: '0.2s' }}>
+          <div className="relative flex-1 flex flex-col">
             <Button 
               variant="ghost" 
               size="sm" 
@@ -281,8 +373,8 @@ export const ExpressionInput = forwardRef<HTMLTextAreaElement, ExpressionInputPr
               ref={ref}
               value={expression} 
               onChange={e => onExpressionChange(e.target.value)} 
-              placeholder={isTranslateMode ? 'Please enter a type. For example, mu a. a -> Int' : 'Please enter an expression. For example, (\\x. x) 1'} 
-              className="font-code text-xs sm:text-sm bg-code min-h-[90px] sm:min-h-[100px] resize-none pr-20 pl-8 border-muted-foreground/20 focus:border-primary transition-smooth focus:shadow-lg focus:shadow-primary/10 touch-manipulation" 
+              placeholder="Please enter an expression. For example, (\x. x) 1" 
+              className="font-code text-xs sm:text-sm bg-code h-full resize-none pr-12 pl-8 border-muted-foreground/20 focus:border-primary transition-smooth focus:shadow-lg focus:shadow-primary/10 touch-manipulation" 
               spellCheck={false} 
             />
             {expression.trim() && (
@@ -296,7 +388,7 @@ export const ExpressionInput = forwardRef<HTMLTextAreaElement, ExpressionInputPr
               </Button>
             )}
             <Button 
-              onClick={onInfer} 
+              onClick={handleInfer} 
               disabled={!expression.trim() || isInferring} 
               size="sm" 
               className={`
@@ -318,13 +410,20 @@ export const ExpressionInput = forwardRef<HTMLTextAreaElement, ExpressionInputPr
         {selectedExample && (
           <div className="p-3 bg-algorithm rounded-lg border border-primary/20 transition-smooth hover:border-primary/40 hover-scale-sm animate-fade-in-up">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              {currentExamples.find(e => e.name === selectedExample)?.description}
+              {currentExamples.find(e => e.Name === selectedExample)?.Description}
             </p>
           </div>
-        )}
-      </CardContent>
+          )}
+
+        {/* Expression History */}
+        <ExpressionHistory 
+          onSelectExpression={onExpressionChange}
+          onAddToHistory={(func) => {
+            setAddToHistoryFunction(() => func);
+          }}
+        />
       
       <HelpModal open={helpModalOpen} onOpenChange={setHelpModalOpen} />
-    </Card>
+    </div>
   );
 });

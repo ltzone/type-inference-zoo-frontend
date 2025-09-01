@@ -1,23 +1,38 @@
 import { useState, useEffect, useRef } from 'react';
+import { ImperativePanelHandle } from 'react-resizable-panels';
 import { Separator } from '@/components/ui/separator';
 import { Navbar } from '@/components/Navbar';
-import { KeyboardShortcutsHelp } from '@/components/KeyboardShortcutsHelp';
 import { AlgorithmSelector } from './AlgorithmSelector';
 import { ExpressionInput } from './ExpressionInput';
-import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { 
+  Sidebar, 
+  SidebarContent, 
+  SidebarProvider, 
+  SidebarTrigger,
+  useSidebar 
+} from '@/components/ui/sidebar';
+import { PanelLeft, Workflow, Code, Binary, Maximize2, BookOpen, Minus } from 'lucide-react';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { KaTeXRenderer } from './KaTeXRenderer';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 import { TypingRules } from './TypingRules';
+import { ZoomDialog } from './ZoomDialog';
 import { WasmStatusIndicator } from './WasmStatusIndicator';
 import { DerivationViewer } from './DerivationViewer';
 import { ShareExportButtons } from './ShareExportButtons';
-import { allAlgorithms } from '@/data/algorithms';
-import { runInference, runSubtyping, runTranslate } from '@/lib/mockInference';
-import { InferenceResult, SubtypingResult, TranslationResult, AlgorithmResult } from '@/types/inference';
+import { useAlgorithms } from '@/contexts/AlgorithmContext';
+import { wasmInference } from '@/lib/wasmInterface';
+import { InferenceResult, SubtypingResult, AlgorithmResult } from '@/types/inference';
 import { getParamsFromUrl, cleanUrl } from '@/lib/shareUtils';
 
 export const TypeInferencePlayground = () => {
+  const { algorithms: allAlgorithms, loading: algorithmsLoading } = useAlgorithms();
   const [selectedAlgorithm, setSelectedAlgorithm] = useState<string>('W');
   const [selectedVariant, setSelectedVariant] = useState<string>('');
   const [expression, setExpression] = useState<string>('');
@@ -26,20 +41,62 @@ export const TypeInferencePlayground = () => {
   const [activeRuleId, setActiveRuleId] = useState<string | undefined>();
   const [activeStepPath, setActiveStepPath] = useState<number[] | undefined>();
   const [initialized, setInitialized] = useState(false);
+  const [zoomAlgorithms, setZoomAlgorithms] = useState(false);
+  const [zoomExpression, setZoomExpression] = useState(false);
+  const [zoomDerivation, setZoomDerivation] = useState(false);
+  const [zoomRules, setZoomRules] = useState(false);
+  
+  // Panel collapse states
+  const [algorithmsCollapsed, setAlgorithmsCollapsed] = useState(false);
+  const [expressionCollapsed, setExpressionCollapsed] = useState(false);
+  const [rulesCollapsed, setRulesCollapsed] = useState(false);
+  
+  // Mobile tab state
+  const [activeTab, setActiveTab] = useState('algorithms');
+  const isMobile = useIsMobile();
+  
   const expressionInputRef = useRef<HTMLTextAreaElement>(null);
+  const algorithmsRef = useRef<ImperativePanelHandle>(null);
+  const expressionRef = useRef<ImperativePanelHandle>(null);
+  const rulesRef = useRef<ImperativePanelHandle>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   
 
-  const selectedAlgorithmData = allAlgorithms.find(a => a.id === selectedAlgorithm);
+  const selectedAlgorithmData = allAlgorithms.find(a => a.Id === selectedAlgorithm);
+
+  // Panel collapse handlers
+  const handleCollapseAlgorithms = () => {
+    algorithmsRef.current?.collapse();
+  };
+
+  const handleExpandAlgorithms = () => {
+    algorithmsRef.current?.expand();
+  };
+
+  const handleCollapseExpression = () => {
+    expressionRef.current?.collapse();
+  };
+
+  const handleExpandExpression = () => {
+    expressionRef.current?.expand();
+  };
+
+  const handleCollapseRules = () => {
+    rulesRef.current?.collapse();
+  };
+
+  const handleExpandRules = () => {
+    rulesRef.current?.expand();
+  };
 
   const handleAlgorithmChange = (algorithmId: string) => {
     setSelectedAlgorithm(algorithmId);
     
     // Reset variant to default when changing algorithm
-    const algorithmData = allAlgorithms.find(a => a.id === algorithmId);
-    if (algorithmData?.defaultVariant) {
-      setSelectedVariant(algorithmData.defaultVariant);
+    const algorithmData = allAlgorithms.find(a => a.Id === algorithmId);
+    if (algorithmData?.DefaultVariant) {
+      setSelectedVariant(algorithmData.DefaultVariant);
     } else {
       setSelectedVariant('');
     }
@@ -51,31 +108,39 @@ export const TypeInferencePlayground = () => {
 
   // Initialize from URL parameters once, then clean the URL
   useEffect(() => {
-    const { algorithm, expression: urlExpression, variant } = getParamsFromUrl();
-    
-    if (algorithm && allAlgorithms.find(a => a.id === algorithm)) {
-      setSelectedAlgorithm(algorithm);
+    if (!algorithmsLoading && allAlgorithms.length > 0) {
+      const { algorithm, expression: urlExpression, variant } = getParamsFromUrl();
       
-      // Set variant if provided and valid for this algorithm
-      const algorithmData = allAlgorithms.find(a => a.id === algorithm);
-      if (variant && algorithmData?.variants?.find(v => v.id === variant)) {
-        setSelectedVariant(variant);
-      } else if (algorithmData?.defaultVariant) {
-        setSelectedVariant(algorithmData.defaultVariant);
+      if (algorithm && allAlgorithms.find(a => a.Id === algorithm)) {
+        setSelectedAlgorithm(algorithm);
+        
+        // Set variant if provided and valid for this algorithm
+        const algorithmData = allAlgorithms.find(a => a.Id === algorithm);
+        if (variant && algorithmData?.Variants?.find(v => v.Id === variant)) {
+          setSelectedVariant(variant);
+        } else if (algorithmData?.DefaultVariant) {
+          setSelectedVariant(algorithmData.DefaultVariant);
+        }
+      } else if (allAlgorithms.length > 0) {
+        // Set first algorithm as default
+        setSelectedAlgorithm(allAlgorithms[0].Id);
+        setSelectedVariant(allAlgorithms[0].DefaultVariant || '');
       }
+      
+      if (urlExpression) {
+        setExpression(urlExpression);
+      } else {
+        setExpression('(\\x. x) 1'); // Default expression
+      }
+      
+      // Clean URL after loading parameters
+      if (algorithm || urlExpression || variant) {
+        cleanUrl();
+      }
+      
+      setInitialized(true);
     }
-    
-    if (urlExpression) {
-      setExpression(urlExpression);
-    }
-    
-    // Clean URL after loading parameters
-    if (algorithm || urlExpression || variant) {
-      cleanUrl();
-    }
-    
-    setInitialized(true);
-  }, []);
+  }, [algorithmsLoading, allAlgorithms]);
 
 
   const handleInference = async () => {
@@ -88,24 +153,54 @@ export const TypeInferencePlayground = () => {
     try {
       let inferenceResult: AlgorithmResult;
       
-      if (selectedAlgorithmData?.mode === 'subtyping') {
+      if (selectedAlgorithmData?.Mode === 'subtyping') {
         // Handle subtyping mode
         const parts = expression.split(' <: ');
         if (parts.length !== 2) {
           throw new Error('Subtyping expression must be in format "LeftType <: RightType"');
         }
         
-        inferenceResult = await runSubtyping(
-          selectedAlgorithm, 
-          selectedVariant || selectedAlgorithmData.defaultVariant || 'translate', 
-          parts[0].trim(), 
-          parts[1].trim()
-        );
-      } else if (selectedAlgorithmData?.mode === 'translate') {
-        inferenceResult = await runTranslate(selectedAlgorithm, selectedVariant || 'standard', expression.trim());
+        const wasmResult = await wasmInference.runSubtyping({
+          algorithm: selectedAlgorithm,
+          variant: selectedVariant || 'recursive',
+          leftType: parts[0].trim(),
+          rightType: parts[1].trim(),
+          options: { showSteps: true, maxDepth: 100 }
+        });
+        
+        if (!wasmResult.success || !wasmResult.result) {
+          throw new Error(wasmResult.error || 'WASM subtyping failed');
+        }
+        
+        const result = wasmResult.result as any;
+        inferenceResult = {
+          success: result.success || false,
+          finalType: result.finalType,
+          derivation: result.derivation || [],
+          error: result.error,
+          errorLatex: result.errorLatex || false
+        };
       } else {
         // Handle type inference mode
-        inferenceResult = await runInference(selectedAlgorithm, expression);
+        const wasmResult = await wasmInference.runInference({
+          algorithm: selectedAlgorithm,
+          variant: selectedVariant,
+          expression,
+          options: { showSteps: true, maxDepth: 100 }
+        });
+        
+        if (!wasmResult.success || !wasmResult.result) {
+          throw new Error(wasmResult.error || 'WASM inference failed');
+        }
+        
+        const result = wasmResult.result as any;
+        inferenceResult = {
+          success: result.success || false,
+          finalType: result.finalType,
+          derivation: result.derivation || [],
+          error: result.error,
+          errorLatex: result.errorLatex || false
+        };
       }
       
       setResult(inferenceResult);
@@ -206,168 +301,578 @@ export const TypeInferencePlayground = () => {
     }
   }, [selectedAlgorithm, selectedVariant, expression, initialized]);
 
-  // Keyboard shortcuts
-  useKeyboardShortcuts({
-    onRunInference: () => {
-      if (expression.trim() && !isInferring) {
-        handleInference();
-        toast({
-          description: "Running type inference...",
-          duration: 1500,
-        });
-      }
-    },
-    onClearInput: () => {
-      setExpression('');
-      setResult(undefined);
-      toast({
-        description: "Expression cleared",
-        duration: 1500,
-      });
-    },
-    onFocusInput: () => {
-      expressionInputRef.current?.focus();
-    },
-    onShare: async () => {
-      if (expression.trim()) {
-        try {
-          const url = new URL(window.location.href);
-          url.searchParams.set('algorithm', selectedAlgorithm);
-          url.searchParams.set('expression', expression);
-          if (selectedVariant) {
-            url.searchParams.set('variant', selectedVariant);
-          }
-          await navigator.clipboard.writeText(url.toString());
-          toast({
-            description: "Link copied to clipboard",
-            duration: 2000,
-          });
-        } catch {
-          toast({
-            description: "Failed to copy link",
-            variant: "destructive",
-            duration: 2000,
-          });
-        }
-      }
-    },
-    onToggleCompare: () => {
-      const url = new URL(window.location.href);
-      if (url.searchParams.has('compare')) {
-        url.searchParams.delete('compare');
-      } else {
-        url.searchParams.set('compare', 'true');
-      }
-      navigate(url.pathname + url.search);
-      toast({
-        description: url.searchParams.has('compare') ? "Switched to compare mode" : "Switched to single mode",
-        duration: 1500,
-      });
-    }
-  });
 
-  return (
-    <>
-      <Navbar />
-      <div className="min-h-screen bg-background animate-page-enter">
-        {/* Main Content */}
-        <div className="container mx-auto px-1 sm:px-4 py-2 sm:py-4">
-          <div className="grid grid-cols-1 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4 max-w-7xl mx-auto">
-            {/* Mobile: Stack vertically, Desktop: Left Column - Input & Algorithm */}
-            <div className="lg:col-span-2 space-y-2 sm:space-y-3 lg:space-y-4">
-              <div className="animate-stagger-1 hover-scale-sm">
-                <AlgorithmSelector
-                  algorithms={allAlgorithms}
-                  selectedAlgorithm={selectedAlgorithm}
-                  selectedVariant={selectedVariant}
-                  onAlgorithmChange={handleAlgorithmChange}
-                  onVariantChange={handleVariantChange}
-                />
-              </div>
-              
-              <div className="animate-stagger-2 hover-scale-sm">
-                <ExpressionInput
-                  ref={expressionInputRef}
-                  expression={expression}
-                  onExpressionChange={(expr) => {
-                    setExpression(expr);
-                    if (!expr.trim()) {
-                      setResult(undefined);
-                    }
-                  }}
-                  onInfer={handleInference}
-                  isInferring={isInferring}
-                  selectedAlgorithm={selectedAlgorithm}
-                  selectedVariant={selectedVariant}
-                />
-              </div>
-            </div>
 
-            {/* Mobile: Stack below, Desktop: Right Columns - Derivation and Rules */}
-            <div className="lg:col-span-4 space-y-2 sm:space-y-3 lg:space-y-4">
-              {/* Derivation */}
-              <div className="animate-stagger-3 hover-scale-sm">
-                <DerivationViewer
-                  result={result}
-                  algorithm={selectedAlgorithmData}
-                  activeStepPath={activeStepPath}
-                  activeRuleId={activeRuleId}
-                  onStepClick={handleStepClick}
-                  expression={expression}
-                  isInferring={isInferring}
-                  variant={selectedVariant}
-                />
-              </div>
-              
-              {/* Typing Rules */}
-              {selectedAlgorithmData && (
-                <div className="animate-stagger-4 hover-scale-sm">
-                  <TypingRules
-                    rules={
-                      selectedVariant && selectedAlgorithmData.variantRules?.[selectedVariant]
-                        ? selectedAlgorithmData.variantRules[selectedVariant]
-                        : selectedAlgorithmData.rules
-                    }
-                    activeRuleId={activeRuleId}
-                    onRuleClick={handleRuleClick}
-                  />
-                </div>
-              )}
-            </div>
+  // Mobile component content
+  const algorithmsContent = (
+    <div className="h-full flex flex-col bg-background">
+      <div className="p-2 flex items-center justify-between h-10">
+        <h3 className="text-sm font-medium flex items-center gap-2">
+          <Binary className="w-4 h-4 text-primary" />
+          Algorithms
+        </h3>
+        {!isMobile && (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCollapseAlgorithms}
+              className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+              title="Minimize panel"
+            >
+              <Minus className="w-3 h-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setZoomAlgorithms(true)}
+              className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+              title="Maximize panel"
+            >
+              <Maximize2 className="w-3 h-3" />
+            </Button>
           </div>
+        )}
+      </div>
+      <div className="mx-2 border-b border-border"></div>
+      <div className="flex-1 p-3 overflow-y-auto">
+        <AlgorithmSelector
+          algorithms={allAlgorithms}
+          selectedAlgorithm={selectedAlgorithm}
+          selectedVariant={selectedVariant}
+          onAlgorithmChange={handleAlgorithmChange}
+          onVariantChange={handleVariantChange}
+        />
+      </div>
+    </div>
+  );
+
+  const expressionContent = (
+    <div className="h-full flex flex-col bg-background">
+      <div className="p-2 flex items-center justify-between h-10">
+        <h3 className="text-sm font-medium flex items-center gap-2">
+          <Code className="w-4 h-4 text-primary" />
+          Expression
+        </h3>
+        {!isMobile && (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCollapseExpression}
+              className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+              title="Minimize panel"
+            >
+              <Minus className="w-3 h-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setZoomExpression(true)}
+              className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+              title="Maximize panel"
+            >
+              <Maximize2 className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="mx-2 border-b border-border"></div>
+      <div className="flex-1 p-3 overflow-y-auto">
+        <div className="space-y-4 h-full flex flex-col">
+          <ExpressionInput
+            ref={expressionInputRef}
+            expression={expression}
+            onExpressionChange={(expr) => {
+              setExpression(expr);
+              if (!expr.trim()) {
+                setResult(undefined);
+              }
+            }}
+            onInfer={handleInference}
+            isInferring={isInferring}
+            selectedAlgorithm={selectedAlgorithm}
+            algorithms={allAlgorithms}
+            selectedVariant={selectedVariant}
+          />
           
-          {/* Footnote */}
-          <div className="mt-6 sm:mt-8 lg:mt-10 pt-4 sm:pt-6 border-t border-muted-foreground/20 animate-stagger-5">
-            <div className="text-center text-xs sm:text-sm text-muted-foreground">
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
-                <span>
-                  Released under the{' '}
-                  <a 
-                    href="https://github.com/cu1ch3n/type-inference-zoo-wasm/blob/main/LICENSE" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline transition-colors duration-200"
-                  >
-                    MIT License
-                  </a>
-                </span>
-                <span className="hidden sm:inline text-muted-foreground/50">•</span>
-                <span>
-                  Copyright © 2025{' '}
-                  <a 
-                    href="https://cuichen.cc" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline transition-colors duration-200"
-                  >
-                    Chen Cui
-                  </a>
-                </span>
-              </div>
+          {/* History Input */}
+          <div className="flex-1 bg-card border border-border rounded-lg p-3">
+            <h3 className="text-sm font-medium mb-2">Expression History</h3>
+            <div className="space-y-1 text-xs">
+              <div className="text-muted-foreground">Recent expressions will appear here</div>
             </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
+  );
+
+  const derivationContent = (
+    <div className="h-full flex flex-col bg-background">
+      <div className="p-2 flex items-center justify-between h-10">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <Workflow className="w-4 h-4 text-primary flex-shrink-0" />
+          <h2 className="text-sm font-medium flex-shrink-0">Derivation</h2>
+          <div className="flex items-center gap-1 min-w-0">
+            {selectedAlgorithmData && (
+              <Badge variant="secondary" className="text-xs truncate">
+                {selectedAlgorithmData.Name}
+                {selectedVariant && selectedAlgorithmData.Variants?.find(v => v.Id === selectedVariant) && (
+                  <span className="ml-1">
+                    ({selectedAlgorithmData.Variants.find(v => v.Id === selectedVariant)?.Name})
+                  </span>
+                )}
+              </Badge>
+            )}
+          </div>
+        </div>
+        {!isMobile && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setZoomDerivation(true)}
+              className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+              title="Maximize panel"
+            >
+              <Maximize2 className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="mx-2 border-b border-border"></div>
+      <div className="flex-1 overflow-y-auto">
+        <DerivationViewer
+          result={result}
+          algorithm={selectedAlgorithmData}
+          onStepClick={handleStepClick}
+          activeStepPath={activeStepPath}
+          activeRuleId={activeRuleId}
+          expression={expression}
+          isInferring={isInferring}
+        />
+      </div>
+    </div>
+  );
+
+  const rulesContent = (
+    <div className="h-full flex flex-col bg-background">
+      <div className="p-2 flex items-center justify-between h-10">
+        <h3 className="text-sm font-medium flex items-center gap-2">
+          <BookOpen className="w-4 h-4 text-primary" />
+          Typing Rules
+        </h3>
+        {!isMobile && (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCollapseRules}
+              className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+              title="Minimize panel"
+            >
+              <Minus className="w-3 h-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setZoomRules(true)}
+              className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+              title="Maximize panel"
+            >
+              <Maximize2 className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="mx-2 border-b border-border"></div>
+      <div className="flex-1 p-3 overflow-y-auto">
+        <TypingRules
+          rules={selectedAlgorithmData?.Rules || []}
+          activeRuleId={activeRuleId}
+          onRuleClick={handleRuleClick}
+          showHeader={false}
+        />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
+      <Navbar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {isMobile ? (
+          // Mobile tab layout
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+            <div className="border-b border-border bg-background">
+              <TabsList className="grid w-full grid-cols-4 h-auto p-1">
+                <TabsTrigger value="algorithms" className="text-xs py-2">
+                  <Binary className="w-3 h-3 mr-1" />
+                  Alg
+                </TabsTrigger>
+                <TabsTrigger value="expression" className="text-xs py-2">
+                  <Code className="w-3 h-3 mr-1" />
+                  Expr
+                </TabsTrigger>
+                <TabsTrigger value="derivation" className="text-xs py-2">
+                  <Workflow className="w-3 h-3 mr-1" />
+                  Deriv
+                </TabsTrigger>
+                <TabsTrigger value="rules" className="text-xs py-2">
+                  <BookOpen className="w-3 h-3 mr-1" />
+                  Rules
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <TabsContent value="algorithms" className="h-full m-0">
+                {algorithmsContent}
+              </TabsContent>
+              <TabsContent value="expression" className="h-full m-0">
+                {expressionContent}
+              </TabsContent>
+              <TabsContent value="derivation" className="h-full m-0">
+                {derivationContent}
+              </TabsContent>
+              <TabsContent value="rules" className="h-full m-0">
+                {rulesContent}
+              </TabsContent>
+            </div>
+          </Tabs>
+        ) : (
+          // Desktop resizable layout
+          <div className="flex flex-1 overflow-hidden">
+            <PanelGroup direction="horizontal" className="h-full">
+              {/* Left Sidebar - Algorithm Selector */}
+              <Panel 
+                ref={algorithmsRef}
+                id="algorithms"
+                order={1}
+                defaultSize={25} 
+                minSize={15} 
+                maxSize={40} 
+                collapsible={true}
+                collapsedSize={3}
+                onCollapse={() => setAlgorithmsCollapsed(true)}
+                onExpand={() => setAlgorithmsCollapsed(false)}
+              >
+                {algorithmsCollapsed ? (
+                  <div 
+                    className="h-full w-full flex flex-col items-center justify-center bg-background border-r border-border hover:bg-muted/30 transition-colors cursor-pointer group"
+                    onClick={handleExpandAlgorithms}
+                  >
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="flex items-center justify-center" style={{ height: '60px', width: '20px' }}>
+                        <span 
+                          className="text-sm font-medium text-muted-foreground group-hover:text-foreground whitespace-nowrap select-none"
+                          style={{ 
+                            transform: 'rotate(270deg)',
+                            transformOrigin: 'center'
+                          }}
+                        >
+                          Algorithms
+                        </span>
+                      </div>
+                      <Binary className="w-4 h-4 text-muted-foreground group-hover:text-foreground flex-shrink-0" />
+                    </div>
+                  </div>
+                ) : (
+                  algorithmsContent
+                )}
+              </Panel>
+
+            <PanelResizeHandle className="bg-border hover:bg-primary/20 transition-colors shadow-sm" style={{ width: '0.5px' }} />
+
+            {/* Main Content Area */}
+            <Panel id="main" order={2} defaultSize={75} minSize={50}>
+              <PanelGroup direction="vertical" className="h-full">
+                {/* Top Row - Expression and Derivation */}
+                <Panel id="top-row" order={1} defaultSize={60} minSize={30} className="bg-background">
+                  <PanelGroup direction="horizontal" className="h-full">
+                    {/* Expression Input Column */}
+                    <Panel 
+                      ref={expressionRef}
+                      id="expression"
+                      order={1}
+                      defaultSize={35} 
+                      minSize={25} 
+                      maxSize={55} 
+                      collapsible={true}
+                      collapsedSize={3}
+                      onCollapse={() => setExpressionCollapsed(true)}
+                      onExpand={() => setExpressionCollapsed(false)}
+                    >
+                      {expressionCollapsed ? (
+                        <div 
+                          className="h-full w-full flex flex-col items-center justify-center bg-background border-r border-border hover:bg-muted/30 transition-colors cursor-pointer group"
+                          onClick={handleExpandExpression}
+                        >
+                          <div className="flex flex-col items-center justify-center gap-3">
+                            <div className="flex items-center justify-center" style={{ height: '60px', width: '20px' }}>
+                              <span 
+                                className="text-sm font-medium text-muted-foreground group-hover:text-foreground whitespace-nowrap select-none"
+                                style={{ 
+                                  transform: 'rotate(270deg)',
+                                  transformOrigin: 'center'
+                                }}
+                              >
+                                Expression
+                              </span>
+                            </div>
+                            <Code className="w-4 h-4 text-muted-foreground group-hover:text-foreground flex-shrink-0" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="h-full flex flex-col bg-background border-r border-border">
+                          <div className="p-2 flex items-center justify-between h-10">
+                            <h3 className="text-sm font-medium flex items-center gap-2">
+                              <Code className="w-4 h-4 text-primary" />
+                              Expression
+                            </h3>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleCollapseExpression}
+                                className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+                                title="Minimize panel"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setZoomExpression(true)}
+                                className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+                                title="Maximize panel"
+                              >
+                                <Maximize2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="mx-2 border-b border-border"></div>
+                          <div className="flex-1 p-3 overflow-y-auto">
+                            <ExpressionInput
+                              ref={expressionInputRef}
+                              expression={expression}
+                              onExpressionChange={(expr) => {
+                                setExpression(expr);
+                                if (!expr.trim()) {
+                                  setResult(undefined);
+                                }
+                              }}
+                              onInfer={handleInference}
+                              isInferring={isInferring}
+                              selectedAlgorithm={selectedAlgorithm}
+                              algorithms={allAlgorithms}
+                              selectedVariant={selectedVariant}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </Panel>
+
+                    <PanelResizeHandle className="bg-border hover:bg-primary/20 transition-colors shadow-sm" style={{ width: '0.5px' }} />
+
+                    {/* Derivation Column */}
+                    <Panel id="derivation" order={2} defaultSize={65} minSize={45}>
+                      <div className="h-full flex flex-col bg-background">
+                        <div className="p-2 flex items-center justify-between h-10">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <Workflow className="w-4 h-4 text-primary flex-shrink-0" />
+                            <h2 className="text-sm font-medium flex-shrink-0">Derivation</h2>
+                            {result?.finalType && (
+                              <div className="flex items-center gap-2 ml-2 min-w-0">
+                                <Separator orientation="vertical" className="h-3 flex-shrink-0" />
+                                <span className="text-xs text-muted-foreground flex-shrink-0">Type:</span>
+                                <Badge variant="secondary" className="text-xs font-mono max-w-32 truncate">
+                                  <KaTeXRenderer expression={result.finalType} />
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {selectedAlgorithmData && expression && (
+                              <ShareExportButtons
+                                algorithm={selectedAlgorithmData}
+                                expression={expression}
+                                result={result}
+                                variant={selectedVariant}
+                                disabled={isInferring}
+                              />
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setZoomDerivation(true)}
+                              className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+                            >
+                              <Maximize2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="mx-2 border-b border-border"></div>
+                        <div className="flex-1 p-3 overflow-y-auto">
+                          <DerivationViewer
+                            result={result}
+                            algorithm={selectedAlgorithmData}
+                            activeStepPath={activeStepPath}
+                            activeRuleId={activeRuleId}
+                            onStepClick={handleStepClick}
+                            expression={expression}
+                            isInferring={isInferring}
+                            variant={selectedVariant}
+                          />
+                        </div>
+                      </div>
+                    </Panel>
+                  </PanelGroup>
+                </Panel>
+
+                <PanelResizeHandle className="h-px bg-border hover:bg-primary/20 transition-colors shadow-sm" />
+
+                {/* Bottom Row - Typing Rules (Full Width) */}
+                <Panel 
+                  ref={rulesRef}
+                  id="rules"
+                  order={2}
+                  defaultSize={40} 
+                  minSize={20} 
+                  collapsible={true}
+                  collapsedSize={3}
+                  onCollapse={() => setRulesCollapsed(true)}
+                  onExpand={() => setRulesCollapsed(false)}
+                  className="bg-background"
+                >
+                  {rulesCollapsed ? (
+                    <div 
+                      className="h-full w-full flex items-center justify-center bg-background border-t border-border hover:bg-muted/30 transition-colors cursor-pointer group gap-2"
+                      onClick={handleExpandRules}
+                    >
+                      <BookOpen className="w-4 h-4 text-muted-foreground group-hover:text-foreground" />
+                      <span 
+                        className="text-sm font-medium text-muted-foreground group-hover:text-foreground whitespace-nowrap select-none"
+                      >
+                        Typing Rules
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="h-full flex flex-col">
+                      <div className="p-2 flex items-center justify-between h-10 border-b border-border">
+                        <h3 className="text-sm font-medium flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-primary" />
+                          Typing Rules
+                        </h3>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleCollapseRules}
+                            className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+                            title="Minimize panel"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setZoomRules(true)}
+                            className="h-6 w-6 p-0 opacity-60 hover:opacity-100 transition-smooth"
+                            title="Maximize panel"
+                          >
+                            <Maximize2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex-1 p-3 overflow-y-auto">
+                        {selectedAlgorithmData && (
+                          <TypingRules
+                            rules={
+                              selectedVariant && selectedAlgorithmData.VariantRules?.find(([id]) => id === selectedVariant)?.[1]
+                                ? selectedAlgorithmData.VariantRules.find(([id]) => id === selectedVariant)?.[1] || selectedAlgorithmData.Rules
+                                : selectedAlgorithmData.RuleGroups || selectedAlgorithmData.Rules
+                            }
+                            activeRuleId={activeRuleId}
+                            onRuleClick={handleRuleClick}
+                            showHeader={false}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </Panel>
+              </PanelGroup>
+            </Panel>
+          </PanelGroup>
+        </div>
+        )}
+        
+        {/* Zoom Dialogs */}
+        <ZoomDialog
+          open={zoomAlgorithms}
+          onOpenChange={setZoomAlgorithms}
+          title="Algorithms"
+          icon={<Binary className="w-4 h-4 text-primary" />}
+        >
+          <AlgorithmSelector
+            algorithms={allAlgorithms}
+            selectedAlgorithm={selectedAlgorithm}
+            selectedVariant={selectedVariant}
+            onAlgorithmChange={handleAlgorithmChange}
+            onVariantChange={handleVariantChange}
+          />
+        </ZoomDialog>
+
+        <ZoomDialog
+          open={zoomExpression}
+          onOpenChange={setZoomExpression}
+          title="Expression"
+          icon={<Code className="w-4 h-4 text-primary" />}
+        >
+          <ExpressionInput
+            ref={expressionInputRef}
+            expression={expression}
+            onExpressionChange={setExpression}
+            onInfer={handleInference}
+            isInferring={isInferring}
+            selectedAlgorithm={selectedAlgorithm}
+            algorithms={allAlgorithms}
+            selectedVariant={selectedVariant}
+          />
+        </ZoomDialog>
+
+        <ZoomDialog
+          open={zoomDerivation}
+          onOpenChange={setZoomDerivation}
+          title="Derivation"
+          icon={<Workflow className="w-4 h-4 text-primary" />}
+        >
+          <DerivationViewer
+            result={result}
+            algorithm={selectedAlgorithmData}
+            onStepClick={handleStepClick}
+            activeStepPath={activeStepPath}
+            activeRuleId={activeRuleId}
+            expression={expression}
+            isInferring={isInferring}
+          />
+        </ZoomDialog>
+
+        <ZoomDialog
+          open={zoomRules}
+          onOpenChange={setZoomRules}
+          title="Typing Rules"
+          icon={<BookOpen className="w-4 h-4 text-primary" />}
+        >
+          <TypingRules
+            rules={selectedAlgorithmData?.Rules || []}
+            activeRuleId={activeRuleId}
+            onRuleClick={handleRuleClick}
+            showHeader={false}
+          />
+        </ZoomDialog>
+      </div>
+    </div>
   );
 };

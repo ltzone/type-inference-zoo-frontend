@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Share2, Check, Download, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { InferenceResult, TypeInferenceAlgorithm } from '@/types/inference';
-import { algorithms } from '@/data/algorithms';
+import { useAlgorithms } from '@/contexts/AlgorithmContext';
 
 interface ComparisonCell {
   algorithmId: string;
@@ -27,6 +27,7 @@ export const CompareShareExportButtons = ({
   disabled = false
 }: CompareShareExportButtonsProps) => {
   const { toast } = useToast();
+  const { algorithms } = useAlgorithms();
   const [isSharing, setIsSharing] = React.useState(false);
 
   const handleShare = async () => {
@@ -86,8 +87,8 @@ export const CompareShareExportButtons = ({
     
     // Table header
     const algorithmNames = selectedAlgorithms.map(id => {
-      const algorithm = algorithms.find(a => a.id === id);
-      return algorithm?.name || id;
+      const algorithm = algorithms.find(a => a.Id === id);
+      return algorithm?.Name || id;
     });
     
     markdown += '| Expression | ' + algorithmNames.join(' | ') + ' |\n';
@@ -154,12 +155,12 @@ export const CompareShareExportButtons = ({
         variant="outline"
         size="sm"
         disabled={disabled || isSharing || !hasData}
-        className="btn-interactive touch-manipulation h-8 w-8 sm:w-auto sm:h-9 p-0 sm:px-3"
+        className="btn-interactive touch-manipulation h-7 w-7 sm:w-auto sm:h-7 p-0 sm:px-2"
       >
         {isSharing ? (
-          <Check className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2 flex-shrink-0" />
+          <Check className="w-3 h-3 sm:w-3 sm:h-3 sm:mr-1 flex-shrink-0" />
         ) : (
-          <Share2 className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2 flex-shrink-0" />
+          <Share2 className="w-3 h-3 sm:w-3 sm:h-3 sm:mr-1 flex-shrink-0" />
         )}
         <span className="hidden sm:inline text-sm">{isSharing ? 'Copied!' : 'Share'}</span>
       </Button>
@@ -170,9 +171,9 @@ export const CompareShareExportButtons = ({
             variant="outline"
             size="sm"
             disabled={disabled || !hasData}
-            className="btn-interactive touch-manipulation h-8 w-8 sm:w-auto sm:h-9 p-0 sm:px-3"
+            className="btn-interactive touch-manipulation h-7 w-7 sm:w-auto sm:h-7 p-0 sm:px-2"
           >
-            <Download className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2 flex-shrink-0" />
+            <Download className="w-3 h-3 sm:w-3 sm:h-3 sm:mr-1 flex-shrink-0" />
             <span className="hidden sm:inline text-sm">Export</span>
           </Button>
         </DropdownMenuTrigger>
